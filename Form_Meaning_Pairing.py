@@ -7,14 +7,14 @@ import os, math, re, itertools, statistics
 
 class FMP:
     def __init__(self, lang:str,  min_freq:int):
-        self.lang = lang
-        self.min = min_freq
-        self.sentences = [l.strip() for l in open(f'sentences/{self.lang}.txt', encoding='utf-8').readlines()]
-        self.elmo = Embedder(f'models/{self.lang}/')
-        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/distiluse-base-multilingual-cased-v2')
-        os.mkdir(f'{self.lang}')
+        self.lang = lang  #the name of the language
+        self.min = min_freq  #the minimum frequency of tokens
+        self.sentences = [l.strip() for l in open(f'sentences/{self.lang}.txt', encoding='utf-8').readlines()]  #a list of sentences
+        self.elmo = Embedder(f'models/{self.lang}/')  #model
+        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/distiluse-base-multilingual-cased-v2')  #tokenizer
+        os.mkdir(f'{self.lang}')  #create a directory that contains the result
         
-    def tokenize(self):
+    def tokenize(self):  #tokenize into words
         self.sentences = [self.tokenizer.tokenize(s) for s in self.sentences]
         for s in self.sentences:
             while ' ##' in ' '.join(s):
@@ -23,7 +23,7 @@ class FMP:
                         s[i-1] = s[i-1]+re.sub('##', '', tkn)
                         del s[i]
 
-    def contextualize(self):
+    def contextualize(self):  #pick up sentences that include the word in question
         os.mkdir(f'{self.lang}/contexts')
         list_tokens = list(itertools.chain.from_iterable(self.sentences))
         set_tokens = set(list_tokens)
@@ -39,7 +39,7 @@ class FMP:
                 token_indice[t] = idx_sentences
         return token_indice
 
-    def embed(self, token_indice):
+    def embed(self, token_indice):  #get vectors of the words considering their contexts
         os.mkdir(f'{self.lang}/embeddings')
         list_embeddings = []
         embeddings = self.elmo.sents2elmo(self.sentences)
@@ -52,14 +52,14 @@ class FMP:
             np.savetxt(f'{self.lang}/embeddings/{tkn}_{idx_t+idx_s}.csv', np.array(embed_t), delimiter=',')
         return list_embeddings
     
-    def estimate(self, embeddings, epsilon, min_samples):
+    def estimate(self, embeddings, epsilon, min_samples):  #estimate the number of meanings of the words
         list_prob = []
         for embed in embeddings:
             np_dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, metric='euclidean').fit_predict(embed)
             list_prob.append([np.sum(np_dbscan == c)/len(np_dbscan) for c in range(max(np_dbscan))])
         return list_prob
 
-    def entropy(self, list_prob):
+    def entropy(self, list_prob):  #calculate the entropy of the language
         list_entropy = []
         for prob in list_prob:
             list_entropy.append(sum([-p * math.log(p, 2) for p in prob]))
